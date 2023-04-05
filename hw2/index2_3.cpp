@@ -14,7 +14,7 @@ int docs_num;
 
 int skipNum=0;
 
-void show_list(const std::vector<int> &l){
+void show(const std::vector<int>& l){
     for(auto i:l) std::cout<<i<<" ";
     std::cout<<std::endl;
 }
@@ -54,27 +54,41 @@ void build_inverted_index(){
     }
 }
 
-std::vector<int> AND_(std::vector<int> a,std::vector<int> b){
-    std::vector<int> res;
-    int i=0,j=0;
-    while(i<a.size() && j<b.size()){
-        if(a[i]==b[j]){
-            res.push_back(a[i]);
-            i++;
-            j++;
-        }
-        else if(a[i]<b[j]) {i++;skipNum++;}
-        else {j++;skipNum++;}
-    }
-    return res;
-}
+// std::vector<int> AND(std::vector<int> a,std::vector<int> b){
+//     std::vector<int> res;
+//     // int skip_a=std::pow(a.size(),0.5); //skip interval = square root a.size()
+//     // int skip_b=std::pow(b.size(),0.5); //skip interval = square root b.size()
+//     int skip_a=4;
+//     int i=0,j=0;
+//     while(i<a.size() && j<b.size()){
+//         std::cout<<a[i]<<"-"<<b[j]<<std::endl;
+//         if(a[i]==b[j]){
+//             res.push_back(a[i]);
+//             i++;
+//             j++;
+//         }
+//         else if(a[i]<b[j]){
+//             if((i+skip_a)<a.size() && a[i+skip_a]<b[j]){
+//                 while((i+skip_a)<a.size()){
+//                     std::cout<<a[i+skip_a]<<"-"<<b[j]<<" skip"<<std::endl;
+//                     if(a[i+skip_a]<b[j])
+//                         i+=skip_a;
+//                     else break;
+//                 }
+//             }
+//             else if(a[i]<b[j]){
+//                 i++;
+//             }
+//         }
+//         else j++;
+//     }
+//     return res;
+// }
 
 std::vector<int> AND(std::vector<int> a,std::vector<int> b){
     std::vector<int> res;
-    int skip_a=std::pow(a.size(),0.5);
-    int skip_b=std::pow(b.size(),0.5);
-    // int skip_a=3;
-    // int skip_b=3;
+    int skip_a=std::pow(a.size(),0.5); //skip interval = square root a.size()
+    int skip_b=std::pow(b.size(),0.5); //skip interval = square root b.size()
     int i=0,j=0;
     while(i<a.size() && j<b.size()){
         if(a[i]==b[j]){
@@ -103,6 +117,7 @@ std::vector<int> AND(std::vector<int> a,std::vector<int> b){
     }
     return res;
 }
+
 
 std::vector<int> OR(std::vector<int> a,std::vector<int> b){
     std::vector<int> res;
@@ -145,28 +160,19 @@ std::vector<int> NOT(std::vector<int> a){
 
 int main(){
     build_inverted_index();
+    std::vector<int> a={3,5,9,15,24,39,60,68,75,81,84,89,92,96,97,100,115};
+    std::vector<int> b={3,5,96,99,100,101};
+    std::vector<int> c={25,60,68,120,150};
 
-    std::vector<int> l_federated = inverted_index["federated"];
+    std::vector<int> q1=AND(a,b);
+    std::cout<<std::endl;
 
-    std::vector<int> l_recommendation = inverted_index["recommendation"];
-    std::vector<int> l_transfer = inverted_index["transfer"];
-    std::vector<int> l_learning = inverted_index["learning"];
-    std::vector<int> l_filtering = inverted_index["filtering"];
-    std::vector<int> l_feedback = inverted_index["feedback"];
+    std::vector<int> q2=AND(a,c);
+    std::cout<<std::endl;
 
-    std::vector<int> q1 = AND(l_federated ,l_recommendation);
-    std::vector<int> q2 = AND(AND(l_transfer,l_learning),l_filtering);
-    std::vector<int> q3 = AND(l_recommendation,l_feedback);
-    std::vector<int> q4 = OR(l_recommendation,l_filtering);
-    std::vector<int> q5 = AND(l_transfer,NOT(q4));
+    show(q1);
+    show(q2);
 
-
-    show_list(q1);
-    show_list(q2);
-    show_list(q3);
-    show_list(q4);
-    show_list(q5);
-
-    std::cout<<skipNum<<std::endl;
+    // std::cout<<skipNum<<std::endl;
 
 }
