@@ -6,7 +6,7 @@
 #include <fstream>
 #include <algorithm>
 
-std::map<std::string,std::list<int>> inverted_index;
+    std::map<std::string,std::list<int>> inverted_index;
 //fuck
 
 int docs_num;
