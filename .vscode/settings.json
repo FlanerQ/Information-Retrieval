@@ -86,5 +86,6 @@
         "typeindex": "cpp",
         "valarray": "cpp",
         "variant": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/home/qym/Information-Retrieval/hw3"
 }
