@@ -3,6 +3,7 @@
 
 #include "HMMModel.hpp"
 #include "SegmentBase.hpp"
+#include "cppjieba/DictTrie.hpp"
 #include <cassert>
 #include <fstream>
 #include <iostream>
