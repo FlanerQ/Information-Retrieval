@@ -171,7 +171,7 @@ void build_TF_IDF_matrix() {
             double tf_idf = tf * idf;
             sm.addElement(j.first - 1, k, tf_idf);// add to sparse matrix
             TF_IDF_Matrix[j.first - 1][k] = tf_idf; // add to the two-dimensional matrix
-        }
+       }
         k++;
     }
     // print result to txt
@@ -199,7 +199,7 @@ void getCosineSimilarity() {
     fs.open("txt1/cosine_similarity_1.txt", std::ios::out);
     for (int i = 0; i < docs_num; ++i) {
         for (int j = 0; j < docs_num; ++j) {
-            fs << std::fixed << std::setprecision(2) << cosine_similarity[i][j]
+            fs << std::fixed << std::setprecision(7) << cosine_similarity[i][j]
                << " ";
         }
         fs << std::endl;
@@ -226,7 +226,7 @@ void showTopK(int t) {
     std::cout << "docID " << (t + 1) << std::endl;
     for (auto &i : res) {
         std::cout << "(" << i.second + 1 << " " << std::fixed
-                  << std::setprecision(2) << i.first << ")"
+                  << std::setprecision(7) << i.first << ")"
                   << " ";
     }
     std::cout << std::endl << std::endl;

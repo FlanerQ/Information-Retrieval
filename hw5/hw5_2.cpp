@@ -21,12 +21,14 @@ cppjieba::Jieba jieba(DICT_PATH, HMM_PATH, USER_DICT_PATH, IDF_PATH,
 
 std::map<std::string, std::map<int, std::vector<int>>> inverted_index;
 std::map<std::string, int> term_count;
-std::map<std::string, std::map<int, int>> class_map;
-std::map<std::string, double> class_words_count;
-std::map<std::string, std::vector<std::pair<std::string, double>>>
-    class_feature_mi; //每个类的特征-mi
-std::map<std::string, std::vector<std::pair<std::string, double>>>
-    class_feature_x2; //每个类的特征-x2
+std::map<std::string, std::set<int>> class_map;
+
+// map<class, vector<pair<term, utility>>
+using ClassFeatureUtilityMap =
+    std::map<std::string, std::vector<std::pair<std::string, double>>>;
+
+ClassFeatureUtilityMap class_feature_mi; //每个类的特征-mi
+ClassFeatureUtilityMap class_feature_x2; //每个类的特征-x2
 
 std::string folder_path =
     "/home/qym/Information-Retrieval/hw5/txts"; // 替换为您要遍历的文件夹路径
@@ -35,8 +37,14 @@ int docs_num = 0;
 int terms_num = 0;
 
 double pri_prob = 0.2;
-std::map<std::string, std::map<std::string, double>> poster_prob;
-std::map<std::string, std::map<std::string, double>> feature_prob;
+std::map<std::string, std::map<std::string, double>> Tct; // map<c, map<t, cnt>>
+
+using PtcMap =
+    std::map<std::string,
+             std::map<std::string, double>>; // map<t, map<c, log(Ptc)>>
+
+//选择的特征个数
+#define VOCAB_FEATURE_LIMIT 10
 
 void show(const std::vector<int> &l) {
     for (auto i : l)
@@ -47,12 +55,13 @@ void show(const std::vector<int> &l) {
 void build_inverted_index() {
     for (const auto &entry : std::filesystem::directory_iterator(folder_path)) {
         if (entry.is_directory()) {
-            std::map<int, int> cm;
             std::string class_name = entry.path().filename();
-            int num=0;
+            std::set<int> &docs_in_class = class_map[class_name];
+            int num = 0;
             for (const auto &sub_entry :
                  std::filesystem::directory_iterator(entry.path())) {
-                if(num==30) break;
+                if (num == 30)
+                    break;
                 if (!sub_entry.is_directory()) {
                     int docID = std::stoi(sub_entry.path().filename());
                     std::ifstream file(sub_entry.path());
@@ -64,8 +73,7 @@ void build_inverted_index() {
                     }
                     std::string word;
                     std::vector<cppjieba::Word> words;
-                    jieba.CutForSearch(doc, words, true);
-                    class_words_count[class_name] += words.size();
+                    jieba.Cut(doc, words, true);
                     for (auto word : words) {
                         std::string tag =
                             jieba.LookupTag(word.word); //根据tag删去符号
@@ -73,16 +81,14 @@ void build_inverted_index() {
                             continue;
                         inverted_index[word.word][docID].emplace_back(
                             word.offset);
-                        poster_prob
-                            [word.word]
-                            [class_name]++; //计算频数,为计算后验概率做准备
+                        Tct[class_name]
+                           [word.word]++; //计算频数,为计算后验概率做准备
                     }
-                    cm[docID] = 1;
+                    docs_in_class.insert(docID);
                     docs_num++;
                 }
                 num++;
             }
-            class_map[class_name] = cm;
         }
     }
     terms_num = inverted_index.size();
@@ -103,61 +109,75 @@ void build_inverted_index() {
     std::cout << "Inverted index built" << std::endl;
 }
 
-void train_NB(int mode){
-    if(mode==2){
-        feature_prob=poster_prob;
-        return;
-    }
-    for (auto &i : class_map) {
-        std::string class_name = i.first;
-        std::vector<std::pair<std::string, double>> feature;
-        class_words_count[class_name]=0;
-        if (mode)
-            feature = class_feature_mi[class_name];
-        else
-            feature = class_feature_x2[class_name];
-        int num = 0;
-        for (auto &term : feature) {
-            if (num == 10)
+std::vector<std::string>
+gen_vocab_from_feature_terms(const ClassFeatureUtilityMap &cfum) {
+    std::vector<std::string> vocab;
+    for (const auto &i : cfum) {
+        int n = 0;
+        for (const auto &j : i.second) {
+            vocab.push_back(j.first);
+            if (++n >= VOCAB_FEATURE_LIMIT)
                 break;
-            feature_prob[term.first][class_name] = poster_prob[term.first][class_name];
-            class_words_count[class_name]+=feature_prob[term.first][class_name];
-            num++;
         }
     }
+    return std::move(vocab);
 }
 
-std::map<std::string, double> get_NB(std::vector<cppjieba::Word> words) {
-    std::map<std::string, double> res;
-    for (auto &i : class_map) {
-        double prob = log(pri_prob);
-        std::string class_name = i.first;
-        double B = feature_prob.size();
-        double denominator = class_words_count[class_name] + B;
-        for (auto &word : words) {
-            if (!feature_prob.count(word.word)) {
-                prob+=log(1/denominator);
-                continue;
-            }
-            //term在此class中出现的频数
-            double term_fre = feature_prob[word.word][class_name] + 1;
-            prob += log(term_fre / denominator);
+PtcMap train_NB(int mode) {
+    // feature select
+    std::vector<std::string> vocab;
+    if (mode == 2) {
+        for (const auto &i : inverted_index) {
+            vocab.push_back(i.first);
         }
-        res[class_name] = prob;
+    } else if (mode == 0) {
+        vocab = gen_vocab_from_feature_terms(class_feature_mi);
+    } else if (mode == 1) {
+        vocab = gen_vocab_from_feature_terms(class_feature_x2);
     }
-    return res;
+
+    // train
+    PtcMap Ptc;
+    for (const auto &i : class_map) {
+        const std::string &class_name = i.first;
+        double TctSum = 0;
+        for (const std::string &term : vocab) {
+            TctSum += Tct[class_name][term] + 1;
+        }
+        for (const std::string &term : vocab) {
+            Ptc[term][class_name] = log((Tct[class_name][term] + 1) / TctSum);
+        }
+    }
+    return std::move(Ptc);
 }
 
-void check_class(int mode) {
+std::map<std::string, double> apply_NB(const std::vector<cppjieba::Word> &words,
+                                       const PtcMap &Ptc) {
+    std::map<std::string, double> score;
+
+    for (const auto &w : words) {
+        if (Ptc.count(w.word) == 0) {
+            continue;
+        }
+        for (const auto &i : class_map) {
+            const std::string &class_name = i.first;
+            score[class_name] += Ptc.at(w.word).at(class_name);
+        }
+    }
+    return std::move(score);
+}
+
+void check_class(int mode, const PtcMap &Ptc) {
     std::fstream fs;
     fs.open("class.txt", std::ios::out);
     for (const auto &entry : std::filesystem::directory_iterator(folder_path)) {
         if (entry.is_directory()) {
-            int num=0;
+            int num = 0;
             for (const auto &sub_entry :
                  std::filesystem::directory_iterator(entry.path())) {
                 num++;
-                if(num<=30) continue;
+                if (num <= 30)
+                    continue;
                 if (!sub_entry.is_directory()) {
                     std::map<std::string, double> prob;
                     int docID = std::stoi(sub_entry.path().filename());
@@ -170,12 +190,12 @@ void check_class(int mode) {
                     }
                     std::string word;
                     std::vector<cppjieba::Word> words;
-                    jieba.CutForSearch(doc, words, true);
+                    jieba.Cut(doc, words, true);
 
-                    prob = get_NB(words);
+                    prob = apply_NB(words, Ptc);
 
                     std::string max_class;
-                    double max = INT_MIN;
+                    double max = -INFINITY;
                     for (auto &i : prob) {
                         if (i.second > max) {
                             max = i.second;
@@ -184,8 +204,8 @@ void check_class(int mode) {
                         // std::cout<<i.second<<std::endl;
                     }
                     fs << entry.path().filename().string() << "/"
-                       << sub_entry.path().filename().string() << " " << max_class
-                       << std::endl;
+                       << sub_entry.path().filename().string() << " "
+                       << max_class << std::endl;
                 }
             }
             fs << std::endl;
@@ -201,27 +221,23 @@ bool cmp(const std::pair<std::string, double> &a,
 void MI_X2(std::string c) {
     std::vector<std::pair<std::string, double>> res_mi;
     std::vector<std::pair<std::string, double>> res_x2;
-    std::map<int, int> cm = class_map[c];
+    std::set<int> docs_in_class = class_map[c];
     double N = docs_num;
     for (auto &i : inverted_index) {
         double N11 = 0;
         for (auto &j : i.second) {
-            if (cm.count(j.first))
+            if (docs_in_class.count(j.first))
                 N11++;
         }
         double N10 = i.second.size() - N11;
-        double N01 = cm.size() - N11;
+        double N01 = docs_in_class.size() - N11;
         double N00 = N - N01 - N10 - N11;
 
         double mi =
-            (N11 / N) *
-                log2((N * N11 + 1) / ((N10 + N11 + 1) * (N01 + N11 + 1))) +
-            (N01 / N) *
-                log2((N * N01 + 1) / ((N00 + N01 + 1) * (N01 + N11 + 1))) +
-            (N10 / N) *
-                log2((N * N10 + 1) / ((N10 + N11 + 1) * (N00 + N10 + 1))) +
-            (N00 / N) *
-                log2((N * N00 + 1) / ((N00 + N01 + 1) * (N00 + N10 + 1)));
+            (N11 / N) * log2((N * N11 + 1) / ((N10 + N11) * (N01 + N11) + 1)) +
+            (N01 / N) * log2((N * N01 + 1) / ((N00 + N01) * (N01 + N11) + 1)) +
+            (N10 / N) * log2((N * N10 + 1) / ((N10 + N11) * (N00 + N10) + 1)) +
+            (N00 / N) * log2((N * N00 + 1) / ((N00 + N01) * (N00 + N10) + 1));
 
         double x2 = (N * pow((N11 * N00 - N10 * N01), 2)) /
                     ((N11 + N01) * (N11 + N10) * (N10 + N00) * (N01 + N00));
@@ -250,19 +266,20 @@ void MI_X2(std::string c) {
 int main() {
     build_inverted_index();
 
-    MI_X2("dzbgs");
-    MI_X2("jwb");
-    MI_X2("kxjsb");
-    MI_X2("yjsy");
-    MI_X2("zsbgs");
-
-    int check_mode = 2;
-    train_NB(check_mode);
-    if (check_mode == 0)
-        std::cout << "Check class with x2" << std::endl;
-    if (check_mode == 1)
-        std::cout << "Check class with mi" << std::endl;
+    int check_mode = 1;
     if (check_mode == 2)
-        std::cout << "Check class without feature selection" << std::endl;
-    check_class(check_mode);
+        std::cout << "Check class without feature" << std::endl;
+    else {
+        MI_X2("dzbgs");
+        MI_X2("jwb");
+        MI_X2("kxjsb");
+        MI_X2("yjsy");
+        MI_X2("zsbgs");
+        if (check_mode == 0)
+            std::cout << "Check class with x2" << std::endl;
+        if (check_mode == 1)
+            std::cout << "Check class with mi" << std::endl;
+    }
+    PtcMap Ptc(train_NB(check_mode));
+    check_class(check_mode, Ptc);
 }

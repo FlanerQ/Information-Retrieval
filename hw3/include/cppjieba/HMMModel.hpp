@@ -2,6 +2,7 @@
 #define CPPJIEBA_HMMMODEL_H
 
 #include "Trie.hpp"
+#include "limonp/Logging.hpp"
 #include "limonp/StringUtil.hpp"
 
 namespace cppjieba {

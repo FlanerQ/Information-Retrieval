@@ -4,8 +4,4 @@ project(hw3_1)
 
 add_executable(hw3_1 hw3_1.cpp)
 
-
-add_subdirectory(deps/cppjieba)
-add_subdirectory(deps/limonp)
-
-target_link_libraries(hw3_1 PRIVATE cppjieba limonp)
+include_directories(hw3_1 include)
