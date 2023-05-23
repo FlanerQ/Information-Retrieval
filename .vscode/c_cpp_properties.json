@@ -8,7 +8,7 @@
             "defines": [],
             "compilerPath": "/usr/sbin/clang",
             "cStandard": "c17",
-            "cppStandard": "c++14",
+            "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64",
             "compileCommands": "${workspaceFolder}/hw3/build/compile_commands.json",
             "configurationProvider": "ms-vscode.cmake-tools"
