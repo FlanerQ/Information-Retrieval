@@ -1,6 +1,7 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <set>
 const int MAXN = 1000;
 const double EPS = 1e-8;
 const double alpha = 0.1;
@@ -9,17 +10,27 @@ double a[MAXN][MAXN], b[MAXN][MAXN];
 
 int n;
 
-void createMatrix() {
+//邻接矩阵A -> 转移概率矩阵P
+void createMatrix_P() {
+    std::set<int> all_zero;
     for (int i = 0; i < n; i++) {
         std::vector<int> index;
+        int flag=0; //判断某行是否全部为0
         for (int j = 0; j < n; j++) {
             if (a[i][j] == 1)
+            {
                 index.push_back(j);
+                flag++;
+            }
         }
+        if(flag==0) all_zero.insert(i);
         for (int k : index)
             b[i][k] = 1.0 / index.size();
     }
     for (int i = 0; i < n; i++) {
+        if(all_zero.count(i)){
+            for(int j=0;j<n;j++) b[i][j]=(1.0/n);
+        }
         for (int j = 0; j < n; j++) {
             b[i][j] *= (1.0 - alpha);
             b[i][j] += (alpha / n);
@@ -56,6 +67,7 @@ void powerIteration(){
             std::cout << res[i] << " ";
         }
         std::cout<<std::endl;
+        //判断迭代收敛
         int flag=0;
         for(int i=0;i<n;i++){
             if(fabs(res[i]-x[i])>EPS) flag++; 
@@ -69,6 +81,7 @@ void powerIteration(){
 }
 
 int main() {
+    //输入邻接矩阵A
     std::cin >> n;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -76,7 +89,11 @@ int main() {
         }
     }
     std::cout<<std::endl;
-    createMatrix();
+
+    //邻接矩阵A -> 转移概率矩阵P
+    createMatrix_P();
+
+    //幂迭代求PageRank
     powerIteration();
     return 0;
 }
