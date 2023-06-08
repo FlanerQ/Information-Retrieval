@@ -54,6 +54,7 @@ void build_inverted_index() {
         if (entry.is_directory()) {
             std::string class_name = entry.path().filename();
             std::set<int> &docs_in_class = class_map[class_name];
+            std::cout<<"Start class "<<class_name<<std::endl;
             for (const auto &sub_entry :
                  std::filesystem::directory_iterator(entry.path())) {
                 if (!sub_entry.is_directory()) {
