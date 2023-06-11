@@ -1,40 +1,142 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
-    <title>WebSocket 示例</title>
+    <title>校庆信息检索</title>
+    <style>
+        html {
+            position: relative;
+            min-height: 100%;
+        }
+
+        a {
+            text-decoration: none;
+        }
+
+        form {
+            margin-left: 120px;
+            padding: 0;
+        }
+
+        form * {
+            display: block;
+        }
+
+        form input {
+            display: inline-block;
+            margin-left: 20px;
+        }
+
+        label,
+        input[type='radio'] {
+            display: inline-block;
+            vertical-align: middle;
+            justify-content: center;
+        }
+
+        .container {
+            margin-left: 100px;
+            padding-top: 100px;
+        }
+
+        html::before {
+            content: "";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("/nahida.jpg");
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-attachment: fixed;
+            background-size: cover;
+            opacity: 0.3;
+            z-index: -1;
+        }
+    </style>
     <script>
         // 创建 WebSocket 客户端
-        var socket;
+        var ws = new WebSocket('ws://localhost:8080');
 
-        function init() {
-            socket = new WebSocket('ws://localhost:8080');
-            socket.onopen = function(event) {
-                console.log("WebSocket opened.");
-            };
-            // 监听连接成功事件
-            socket.addEventListener('open', function (event) {
-                console.log('WebSocket 连接已建立');
-            });
-
-            // 监听收到消息事件
-            socket.addEventListener('message', function (event) {
-                console.log('收到消息：', event.data);
-            });
-            socket.onmessage = function(event) {
-                var result = event.data;
-                document.getElementById("result").textContent = result;
-            };
-        }
+        var radios = document.getElementsByName("class");
+        ws.onopen = function (event) {
+            console.log("WebSocket opened.");
+        };
 
         function sendMessage() {
             var query = document.getElementById("query").value;
-            socket.send(query);
+            var type;
+            for (var i = 0; i < radios.length; i++) {
+                if (radios[i].checked) {
+                    type = radios[i].value;
+                }
+            }
+            ws.send(query+'/'+type);
         }
+
+        ws.onmessage = function (event) {
+            var data = JSON.parse(event.data);
+
+            var div = document.getElementById('res');
+            var res_exist = document.getElementById('res_exist');
+            var table = document.getElementById('data-table');
+            var time_taken = document.getElementById('time_taken');
+            res_exist.innerHTML = '';
+            table.innerHTML = '';
+            time_taken.innerHTML = '';
+            var size = Object.keys(data).length - 1;
+            if (size === 0) {
+                res_exist.innerHTML = '找不到相关的内容或信息';
+                return;
+            }
+            var row = document.createElement('tr');
+            row.innerHTML = '<td style="text-align: center;">搜索结果</td><td>得分</td>';
+            table.appendChild(row);
+            data.slice(0, size).forEach(function (item) {
+                row = document.createElement('tr');
+                row.innerHTML = '<td><a href="https://www1.szu.edu.cn/board/view.asp?id=' + item.docid + '" target="_blank">' + item.title
+                    + '</a></td><td>' + item.similarity.toFixed(2) + '</td>';
+                table.appendChild(row);
+            });
+            time_taken.innerHTML = '用时: ' + data.slice(-1)[0].time_taken / 1000.0 + ' s'
+        };
     </script>
 </head>
-<body onload="init();">
-    <input type="text" id="query" onkeydown="if(event.keyCode==13) sendMessage()">
-    <div id="result"></div>
+
+<body style="font-size: 32px;">
+    <div class="container">
+        <label for="query">Gouba</label>
+        <input type="text" id="query" size="40" style="font-size: 32px;"
+            onkeydown="if(event.keyCode==13) sendMessage()">
+        <form>
+            <input type="radio" id="jw" name="class" value="jw" onclick="sendMessage()">
+            <label for="jw">教务</label>
+
+            <input type="radio" id="ky" name="class" value="ky" onclick="sendMessage()">
+            <label for="ky">科研</label>
+
+            <input type="radio" id="xz" name="class" value="xz" onclick="sendMessage()">
+            <label for="xz">行政</label>
+
+            <input type="radio" id="xg" name="class" value="xg" onclick="sendMessage()">
+            <label for="xg">学工</label>
+
+            <input type="radio" id="sh" name="class" value="sh" onclick="sendMessage()">
+            <label for="sh">生活</label>
+
+            <input type="radio" id="jz" name="class" value="jz" onclick="sendMessage()">
+            <label for="jz">讲座</label>
+        </form>
+
+        <div id="res">
+            <p id="res_exist"></p>
+            <table id="data-table"></table>
+            <p id="time_taken"></p>
+        </div>
+    </div>
 </body>
+
 </html>

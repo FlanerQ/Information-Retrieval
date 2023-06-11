@@ -12,6 +12,8 @@ include_directories(include)
 
 find_library(LIBSTEMMER NAMES libstemmer.so)
 
+find_package(websocketpp REQUIRED)
+
 FIND_PACKAGE( Boost 1.81 COMPONENTS serialization REQUIRED )
 
-target_link_libraries(main ${LIBSTEMMER} ${Boost_LIBRARIES})
+target_link_libraries(main ${LIBSTEMMER} ${Boost_LIBRARIES} websocketpp::websocketpp)
