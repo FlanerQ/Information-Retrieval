@@ -18,6 +18,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
 
 const char *const DICT_PATH = "dict/jieba.dict.utf8";
 const char *const HMM_PATH = "dict/hmm_model.utf8";
@@ -41,7 +43,7 @@ std::map<std::string, std::map<int, std::vector<int>>> inverted_index;
 std::map<std::string, std::set<int>> class_map;
 
 std::string folder_path =
-    "/home/qym/Information-Retrieval/final/txts"; //要遍历的文件夹路径
+    "/home/qym/Information-Retrieval/final/txts_1"; //要遍历的文件夹路径
 
 struct sb_stemmer *stemmer;
 
@@ -145,13 +147,13 @@ bool cmp(const std::pair<double, int> &a, const std::pair<double, int> &b) {
 
 void showTopK(std::vector<std::pair<double, int>> &a) {
     std::sort(a.begin(), a.end(), cmp);
+    if(a.size()==0 || std::isnan(a.begin()->first)){
+        std::cout << "No matching result" << std::endl;
+        return;
+    }
     int k_size = (a.size() >= 10) ? 10 : a.size();
     std::vector<std::pair<double, int>> res(a.begin(), a.begin() + k_size);
     for (auto &i : res) {
-        if (std::isnan(i.first)) {
-            std::cout << "No matching result" << std::endl;
-            break;
-        }
         std::cout << "docID: " << i.second << " Score: " << std::fixed
                   << std::setprecision(2) << i.first << std::endl;
     }
@@ -240,7 +242,8 @@ void wait_query() {
     }
 }
 
-std::string s_path = "/home/qym/Information-Retrieval/final/serialize/main.bin";
+std::string s_path = "/home/qym/Information-Retrieval/final/serialize/main_1.bin";
+
 void Serialization() {
     // 将myMap序列化到磁盘文件"map.bin"中
     std::cout << "Start serializing" << std::endl;
@@ -268,6 +271,41 @@ template <typename TimeT = std::chrono::milliseconds> struct measure {
     }
 };
 
+//-------------------websocket-------------------
+// 声明 WebSocket 服务器类型
+typedef websocketpp::server<websocketpp::config::asio> server;
+server ws_server;
+
+void func(std::string a){
+    std::cout<<"func: "<<a<<std::endl;
+}
+
+void on_message(server* s, websocketpp::connection_hdl hdl, server::message_ptr msg) {
+    std::string que = msg->get_payload();
+
+    std::cout << "Start query: " << que << std::endl;
+        auto start_time = std::chrono::high_resolution_clock::now();
+        query(que);
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            end_time - start_time);
+        std::cout << "Query Time taken: " << duration.count() / 1000.0 << "s"
+                  << std::endl
+                  << std::endl;
+    // 发送响应消息
+    s->send(hdl, que, msg->get_opcode());
+}
+
+void start_server(){
+    ws_server.init_asio();
+    ws_server.set_message_handler(std::bind(&on_message, &ws_server, std::placeholders::_1, std::placeholders::_2));
+    ws_server.listen(8080);
+    ws_server.start_accept();
+    std::cout<<"Server start"<<std::endl;
+
+    ws_server.run();
+}
+
 int main() {
     //creat stemmer
     stemmer = sb_stemmer_new("english", NULL);
@@ -291,7 +329,8 @@ int main() {
     auto timeTaken = measure<>::execution(Deserialization);
     std::cout << "Data Deserialized. Time taken: " << timeTaken / 1000.0
               << std::fixed << std::setprecision(2) << "s" << std::endl;
+    
+    start_server();
 
-    //wait for query
-    wait_query();
+    // wait_query();
 }

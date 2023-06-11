@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket 示例</title>
+    <script>
+        // 创建 WebSocket 客户端
+        var socket;
+
+        function init() {
+            socket = new WebSocket('ws://localhost:8080');
+            socket.onopen = function(event) {
+                console.log("WebSocket opened.");
+            };
+            // 监听连接成功事件
+            socket.addEventListener('open', function (event) {
+                console.log('WebSocket 连接已建立');
+            });
+
+            // 监听收到消息事件
+            socket.addEventListener('message', function (event) {
+                console.log('收到消息：', event.data);
+            });
+            socket.onmessage = function(event) {
+                var result = event.data;
+                document.getElementById("result").textContent = result;
+            };
+        }
+
+        function sendMessage() {
+            var query = document.getElementById("query").value;
+            socket.send(query);
+        }
+    </script>
+</head>
+<body onload="init();">
+    <input type="text" id="query" onkeydown="if(event.keyCode==13) sendMessage()">
+    <div id="result"></div>
+</body>
+</html>

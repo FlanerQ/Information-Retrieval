@@ -1,4 +1,7 @@
 **/build
 .cache/
 crawler/
-**/txts
+**/txts*
+**/txts_1
+**/inverted.txt
+**/serialize
