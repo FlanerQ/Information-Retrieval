@@ -1,27 +1,30 @@
 #include "cppjieba/Jieba.hpp"
 #include "libstemmer.h"
-#include <algorithm>
+#include <nlohmann/json.hpp>
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
+
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <boost/serialization/map.hpp>
 #include <boost/serialization/unordered_map.hpp>
-#include <boost/serialization/unordered_set.hpp>
 #include <boost/serialization/vector.hpp>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
-#include <map>
 #include <sstream>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
 
 const char *const DICT_PATH = "dict/jieba.dict.utf8";
 const char *const HMM_PATH = "dict/hmm_model.utf8";
@@ -36,24 +39,40 @@ std::unordered_map<std::string, double> IDF_Matrix; // IDF Matrix
 
 std::unordered_map<std::string, int> term_id_map; //record the id of term
 
-std::vector<int> docs_id; //record the id of doc
-
 std::map<int, int> word_count; // record words count
 
+//map<term,map<docid,vector<position>>>
 std::map<std::string, std::map<int, std::vector<int>>> inverted_index;
 
-std::map<std::string, std::unordered_set<int>> class_map;
+std::string txts_path =
+    "/home/qym/Information-Retrieval/final/txts"; //要遍历的文件夹路径
 
-std::string folder_path =
-    "/home/qym/Information-Retrieval/final/txts_1"; //要遍历的文件夹路径
+std::string json_path = "/home/qym/Information-Retrieval/final/parsed_lists";
 
-std::string s_path =
-    "/home/qym/Information-Retrieval/final/serialize/main.bin_1";//序列化文件路径
+std::string s_path = "/home/qym/Information-Retrieval/final/serialize/"
+                     "main.bin"; //序列化文件路径
 
 struct sb_stemmer *stemmer;
 
+struct doc_metadata {
+    std::string type;
+    std::string dept;
+    std::string date;
+    int dayy;
+
+    template <class Archive>
+    void serialize(Archive &ar, const unsigned int version) {
+        ar &type;
+        ar &dept;
+        ar &date;
+        ar &dayy;
+    }
+};
+
+std::unordered_map<int, doc_metadata> docs_metadata;
+
 std::string parse_word(std::string word, std::string tag, sb_stemmer *stemmer) {
-    if (tag == "eng" ) {
+    if (tag == "eng") {
         //stemming when term is english word
         sb_symbol *input = (sb_symbol *)word.c_str();
         const sb_symbol *stemmed = sb_stemmer_stem(stemmer, input, word.size());
@@ -67,42 +86,71 @@ std::string parse_word(std::string word, std::string tag, sb_stemmer *stemmer) {
     return word;
 }
 
-void build_inverted_index() {
-    for (const auto &entry : std::filesystem::directory_iterator(folder_path)) {
-        if (entry.is_directory()) {
-            std::string class_name = entry.path().filename();
-            std::unordered_set<int> &docs_in_class = class_map[class_name];
-            std::cout << "Start class " << class_name << std::endl;
-            for (const auto &sub_entry :
-                 std::filesystem::directory_iterator(entry.path())) {
-                if (!sub_entry.is_directory()) {
-                    int doc_name = std::stoi(sub_entry.path().filename());
-                    docs_id.push_back(doc_name);
-                    std::ifstream file(sub_entry.path());
-                    // std::cout << "File name: " << sub_entry.path().filename() << std::endl;
-                    std::string line;
-                    std::string doc;
-                    while (std::getline(file, line)) {
-                        doc += line;
-                    }
-                    std::vector<cppjieba::Word> words;
-                    jieba.CutForSearch(doc, words, true);
-                    int count = 0;
-                    for (auto word : words) {
-                        std::string tag =
-                            jieba.LookupTag(word.word); //根据tag删去符号
-                        if (tag == "x" || tag == "m" ||tag =="eng" && word.word.find('.') != std::string::npos)
-                            continue;
-                        std::string res = parse_word(word.word, tag, stemmer);
-                        inverted_index[res][doc_name].emplace_back(word.offset);
-                        count++;
-                    }
-                    word_count[doc_name] = count;
-                    docs_in_class.insert(doc_name);
-                }
+std::vector<std::string> split(const std::string &s,
+                               const std::string &delimiters = " ") {
+    std::vector<std::string> tokens;
+    std::string ::size_type lastPos = s.find_first_not_of(delimiters, 0);
+    std::string ::size_type pos = s.find_first_of(delimiters, lastPos);
+    while (std::string ::npos != pos || std::string ::npos != lastPos) {
+        tokens.push_back(
+            s.substr(lastPos, pos - lastPos)); //use emplace_back after C++11
+        lastPos = s.find_first_not_of(delimiters, pos);
+        pos = s.find_first_of(delimiters, lastPos);
+    }
+    return std::move(tokens);
+}
+
+int get_dayy(std::string date) {
+    std::tm tm = {};
+    std::istringstream ss(date);
+    ss >> std::get_time(&tm, "%Y-%m-%d");
+    std::time_t t = std::mktime(&tm);
+    auto timestamp_input = std::chrono::system_clock::from_time_t(t);
+    auto now = std::chrono::system_clock::now();
+    auto timestamp_now = std::chrono::system_clock::to_time_t(now);
+    auto interval =
+        std::chrono::duration_cast<std::chrono::hours>(now - timestamp_input)
+            .count() /
+        24;
+
+    if (interval <= 1)
+        return 1;
+    else if (interval > 1 && interval <= 7)
+        return 7;
+    else if (interval > 7 && interval <= 30)
+        return 30;
+    return 2023;
+}
+
+using json = nlohmann::json;
+void build_docs_metadata() {
+    std::cout << "Start building docs metadata" << std::endl;
+    for (const auto &entry : boost::filesystem::directory_iterator(json_path)) {
+        if (!is_directory(entry.path())) {
+            std::cout << split(entry.path().filename().string(), ".")[0]
+                      << std::endl;
+            boost::filesystem::ifstream f(entry.path());
+            json data = json::parse(f);
+            for (auto &i : data) {
+                doc_metadata data;
+                data.type = i.at("type");
+                data.dept = i.at("dept");
+                std::string date = i.at("date");
+                data.date = date;
+                int year = std::stoi(split(date, "-")[0]);
+                if (year != 2023)
+                    data.dayy = year;
+                else
+                    data.dayy = get_dayy(date);
+                std::string sid = i.at("id");
+                docs_metadata[std::stoi(sid)] = data;
             }
         }
     }
+}
+
+//print to inverted.txt
+void print_inverted_index() {
     std::fstream fs;
     fs.open("inverted.txt", std::ios::out);
     for (auto &i : inverted_index) {
@@ -118,13 +166,53 @@ void build_inverted_index() {
     }
 }
 
+void build_inverted_index() {
+    std::cout << "Start building inverted index" << std::endl;
+    for (const auto &entry : boost::filesystem::directory_iterator(txts_path)) {
+        if (is_directory(entry.path())) {
+            std::string class_name = entry.path().filename().string();
+            std::cout << class_name << std::endl;
+            for (const auto &sub_entry :
+                 boost::filesystem::directory_iterator(entry.path())) {
+                if (!is_directory(sub_entry.path())) {
+                    int doc_name =
+                        std::stoi(sub_entry.path().filename().string());
+                    boost::filesystem::ifstream file(sub_entry.path());
+                    std::string line;
+                    std::string doc;
+                    while (std::getline(file, line)) {
+                        doc += line;
+                    }
+                    std::vector<cppjieba::Word> words;
+                    jieba.CutForSearch(doc, words, true);
+                    int count = 0;
+                    for (auto word : words) {
+                        std::string tag =
+                            jieba.LookupTag(word.word); //根据tag删去符号
+                        if (tag == "x" || tag == "m" ||
+                            tag == "eng" &&
+                                word.word.find('.') != std::string::npos)
+                            continue;
+                        std::string res = parse_word(word.word, tag, stemmer);
+                        inverted_index[res][doc_name].emplace_back(word.offset);
+                        count++;
+                    }
+                    word_count[doc_name] = count;
+                }
+            }
+        }
+    }
+    //print to inverted.txt
+    // print_inverted_index();
+}
+
 //--------------build-TF-IDF-&-get-cosine-similiraty-------------
 
 std::map<int, std::unordered_map<int, double>> docs_TF_IDF;
 
 void build_TF_IDF_matrix() {
     int k = 0;
-    int docs_num = docs_id.size();
+    int docs_num = docs_metadata.size();
     for (auto &i : inverted_index) {
         // get IDF value of term
         // idf = 1 + ln(Total Number Of Documents / Number Of Documents with term in it)
@@ -178,7 +266,7 @@ bool cmp(const std::pair<double, int> &a, const std::pair<double, int> &b) {
     return a.first > b.first;
 }
 
-void showTopK(std::vector<std::pair<double, int>> &a) {
+void getTopK(std::vector<std::pair<double, int>> &a) {
     std::sort(a.begin(), a.end(), cmp);
     if (a.size() == 0 || std::isnan(a.begin()->first)) {
         std::cout << "No matching result" << std::endl;
@@ -202,6 +290,7 @@ void query(std::string que, std::vector<std::pair<double, int>> &res_cosine) {
         std::string tag = jieba.LookupTag(word.word); //根据tag删去符号
         if (tag == "x" || tag == "m")
             continue;
+        //record count of terms for cal query's tf-idf
         std::string res = parse_word(word.word, tag, stemmer);
         if (query_term_count.count(res) == 0)
             query_term_count[res] = 1;
@@ -209,6 +298,7 @@ void query(std::string que, std::vector<std::pair<double, int>> &res_cosine) {
             query_term_count[res]++;
         if (inverted_index.count(res) == 0)
             continue;
+        //record docs which contain terms of query
         for (auto &i : inverted_index[res]) {
             query_term_contained_doc.insert(i.first);
         }
@@ -226,7 +316,7 @@ void query(std::string que, std::vector<std::pair<double, int>> &res_cosine) {
         res_cosine.push_back(
             {getCosineSimilarity(query_TF_IDF, docs_TF_IDF[i]), i});
     }
-    showTopK(res_cosine);
+    getTopK(res_cosine);
 }
 
 void wait_query() {
@@ -251,7 +341,7 @@ void Serialization() {
     std::cout << "Start serializing" << std::endl;
     std::ofstream ofs(s_path);
     boost::archive::text_oarchive oa(ofs);
-    oa << inverted_index << class_map << IDF_Matrix << term_id_map
+    oa << inverted_index << docs_metadata << IDF_Matrix << term_id_map
        << docs_TF_IDF;
 }
 
@@ -259,14 +349,16 @@ void Deserialization() {
     std::cout << "Start deserializing" << std::endl;
     std::ifstream ifs(s_path);
     boost::archive::text_iarchive ia(ifs);
-    ia >> inverted_index >> class_map >> IDF_Matrix >> term_id_map >>
+    ia >> inverted_index >> docs_metadata >> IDF_Matrix >> term_id_map >>
         docs_TF_IDF;
 }
 
 template <typename TimeT = std::chrono::milliseconds> struct measure {
-    template <typename F, typename... Args> static typename TimeT::rep execution(F &&func,  Args &&... args) {
+    template <typename F, typename... Args>
+    static typename TimeT::rep execution(F &&func, Args &&...args) {
         auto start = std::chrono::high_resolution_clock::now();
-        std::forward<decltype(func)>(func)(std::forward<decltype(args)>(args)...);
+        std::forward<decltype(func)>(func)(
+            std::forward<decltype(args)>(args)...);
         auto duration = std::chrono::duration_cast<TimeT>(
             std::chrono::high_resolution_clock::now() - start);
         return duration.count();
@@ -277,45 +369,54 @@ template <typename TimeT = std::chrono::milliseconds> struct measure {
 typedef websocketpp::server<websocketpp::config::asio> server;
 server ws_server;
 
-void exit_handler() { ws_server.stop(); }
-
-void func(std::string a) { std::cout << "func: " << a << std::endl; }
-
 void on_message(server *s, websocketpp::connection_hdl hdl,
                 server::message_ptr msg) {
-    std::string que = msg->get_payload();
-
-    std::cout << "Start query: " << que << std::endl;
+    std::vector<std::string> tokens = split(msg->get_payload(), "/");
+    std::string que = tokens[0];
+    std::string type = tokens[1];
+    int dayy = std::stoi(tokens[2]);
+    std::string dept = tokens[3];
+    std::cout << "Start query: " << que << " Type: " << type
+              << " Dayy: " << dayy << " dept: " << dept << std::endl;
     std::vector<std::pair<double, int>> res;
-    auto timeTaken = measure<>::execution(query,que,res);
+    auto timeTaken = measure<>::execution(query, que, res);
+    auto start = std::chrono::high_resolution_clock::now();
+
+    int k = 10;
+    if (que != "none_query") {
+        res.erase(std::remove_if(
+                      res.begin(), res.end(),
+                      [&type, &dayy, &dept](const auto &i) {
+                          return type != "none_type" &&
+                                     docs_metadata[i.second].type != type ||
+                                 dayy != -1 &&
+                                     docs_metadata[i.second].dayy != dayy ||
+                                 dept != "none_dept" &&
+                                     docs_metadata[i.second].dept != dept;
+                      }),
+                  res.end());
+    }
+    timeTaken += std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::high_resolution_clock::now() - start)
+                     .count();
 
     std::stringstream resp;
-    int k = 0;
     for (const auto &i : res) {
-        if (k++ == 10)
+        if (k-- == 0)
             break;
         std::string title;
-        for (auto &c : class_map) {
-            if (c.second.find(i.second) != c.second.end()) {
-                std::string file_path = folder_path + "/" + c.first + "/" +
-                                        std::to_string(i.second);
-                std::cout << file_path << std::endl;
-                std::ifstream file(file_path);
-                getline(file, title);
-                file.close();
-                break;
-            }
-        }
-        // if (i == *(std::prev(res.end())))
-        //     resp << "{\"docid\":" << i.second << ",\"title\":" << title
-        //          << ",\"similarity\":" << i.first << "}";
-        // else
-        resp << "{\"docid\":" << i.second << ",\"title\":\"" << title
-             << "\",\"similarity\":" << i.first << "},";
+        std::string date = docs_metadata[i.second].date;
+        std::string file_path = txts_path + "/" + docs_metadata[i.second].type +
+                                "/" + std::to_string(i.second);
+        std::ifstream file(file_path);
+        getline(file, title);
+        file.close();
+        resp << "{\"docid\":" << i.second << ",\"date\":\"" << date
+             << "\",\"title\":\"" << title << "\",\"similarity\":" << i.first
+             << "},";
     }
     resp << "{\"time_taken\":" << timeTaken << "}";
-    std::cout << "Query Time taken: " << timeTaken / 1000.0 << "s"
-              << std::endl
+    std::cout << "Query Time taken: " << timeTaken / 1000.0 << "s" << std::endl
               << std::endl;
 
     // 发送响应消息
@@ -338,8 +439,13 @@ int main() {
     //creat stemmer
     stemmer = sb_stemmer_new("english", NULL);
 
+    //buiild_docs_metadata
+    auto timeTaken = measure<>::execution(build_docs_metadata);
+    std::cout << "Docs metadata built. Time taken: " << timeTaken / 1000.0
+              << std::fixed << std::setprecision(2) << "s" << std::endl;
+
     //build_inverted_index
-    auto timeTaken = measure<>::execution(build_inverted_index);
+    timeTaken = measure<>::execution(build_inverted_index);
     std::cout << "Inverted index built. Time taken: " << timeTaken / 1000.0
               << std::fixed << std::setprecision(2) << "s" << std::endl;
 
@@ -348,10 +454,10 @@ int main() {
     std::cout << "TF-IDF matrix built. Time taken: " << timeTaken / 1000.0
               << std::fixed << std::setprecision(2) << "s" << std::endl;
 
-    // //Serialization
-    // timeTaken = measure<>::execution(Serialization);
-    // std::cout << "Data Serialized. Time taken: " << timeTaken / 1000.0
-    //           << std::fixed << std::setprecision(2) << "s" << std::endl;
+    //Serialization
+    timeTaken = measure<>::execution(Serialization);
+    std::cout << "Data Serialized. Time taken: " << timeTaken / 1000.0
+              << std::fixed << std::setprecision(2) << "s" << std::endl;
 
     // //Deserialization
     // auto timeTaken = measure<>::execution(Deserialization);
@@ -360,5 +466,5 @@ int main() {
 
     // start_server();
 
-    wait_query();
+    // wait_query();
 }
