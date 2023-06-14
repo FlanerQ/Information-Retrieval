@@ -100,7 +100,7 @@
             table.appendChild(row);
             data.slice(0, size).forEach(function (item) {
                 row = document.createElement('tr');
-                row.innerHTML = '<td>'+item.date+'</td><td><a href="https://www1.szu.edu.cn/board/view.asp?id=' + item.docid + '" target="_blank">' + item.title
+                row.innerHTML = '<td>'+item.date+'</td><td><a href="' + item.url + '" target="_blank">' + item.title
                     + '</a></td><td>'+ item.similarity.toFixed(2) + '</td>';
                 table.appendChild(row);
             });

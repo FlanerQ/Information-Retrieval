@@ -87,5 +87,9 @@
         "valarray": "cpp",
         "variant": "cpp"
     },
-    "cmake.sourceDirectory": "/home/qym/Information-Retrieval/hw3"
+    "cmake.sourceDirectory": "/home/qym/Information-Retrieval/hw3",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python"
+    },
+    "python.formatting.provider": "none"
 }

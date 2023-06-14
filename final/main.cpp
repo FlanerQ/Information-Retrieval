@@ -47,7 +47,7 @@ std::map<std::string, std::map<int, std::vector<int>>> inverted_index;
 std::string txts_path =
     "/home/qym/Information-Retrieval/final/txts"; //要遍历的文件夹路径
 
-std::string json_path = "/home/qym/Information-Retrieval/final/parsed_lists";
+std::string json_path = "/home/qym/Information-Retrieval/final/json";
 
 std::string s_path = "/home/qym/Information-Retrieval/final/serialize/"
                      "main.bin"; //序列化文件路径
@@ -58,6 +58,7 @@ struct doc_metadata {
     std::string type;
     std::string dept;
     std::string date;
+    std::string url;
     int dayy;
 
     template <class Archive>
@@ -135,6 +136,7 @@ void build_docs_metadata() {
                 doc_metadata data;
                 data.type = i.at("type");
                 data.dept = i.at("dept");
+                data.url = i.at("url");
                 std::string date = i.at("date");
                 data.date = date;
                 int year = std::stoi(split(date, "-")[0]);
@@ -165,6 +167,31 @@ void print_inverted_index() {
         fs << std::endl;
     }
 }
+
+void add_json()
+{
+    // 读取原始 JSON 文件
+    std::ifstream input_file("2002.json");
+    json input_json;
+    input_file >> input_json;
+
+    // 读取目标 JSON 文件
+    std::ifstream output_file("2003.json");
+    json output_json;
+    output_file >> output_json;
+
+    // 遍历原始 JSON 中的每个元素，并将其添加到目标 JSON 中
+    for (auto&i : input_json) {
+        output_json.emplace_back(i);
+    }
+
+    // 将更新后的目标 JSON 写入文件中
+    std::ofstream updated_output_file("2003.json");
+    updated_output_file << output_json.dump(4);
+
+}
+
+
 
 void build_inverted_index() {
     std::cout << "Start building inverted index" << std::endl;
@@ -406,12 +433,13 @@ void on_message(server *s, websocketpp::connection_hdl hdl,
             break;
         std::string title;
         std::string date = docs_metadata[i.second].date;
+        std::string url = docs_metadata[i.second].url;
         std::string file_path = txts_path + "/" + docs_metadata[i.second].type +
                                 "/" + std::to_string(i.second);
         std::ifstream file(file_path);
         getline(file, title);
         file.close();
-        resp << "{\"docid\":" << i.second << ",\"date\":\"" << date
+        resp << "{\"url\":" << url << ",\"date\":\"" << date
              << "\",\"title\":\"" << title << "\",\"similarity\":" << i.first
              << "},";
     }
@@ -436,28 +464,29 @@ void start_server() {
 }
 
 int main() {
+    add_json();
     //creat stemmer
-    stemmer = sb_stemmer_new("english", NULL);
+    // stemmer = sb_stemmer_new("english", NULL);
 
-    //buiild_docs_metadata
-    auto timeTaken = measure<>::execution(build_docs_metadata);
-    std::cout << "Docs metadata built. Time taken: " << timeTaken / 1000.0
-              << std::fixed << std::setprecision(2) << "s" << std::endl;
+    // //buiild_docs_metadata
+    // auto timeTaken = measure<>::execution(build_docs_metadata);
+    // std::cout << "Docs metadata built. Time taken: " << timeTaken / 1000.0
+    //           << std::fixed << std::setprecision(2) << "s" << std::endl;
 
-    //build_inverted_index
-    timeTaken = measure<>::execution(build_inverted_index);
-    std::cout << "Inverted index built. Time taken: " << timeTaken / 1000.0
-              << std::fixed << std::setprecision(2) << "s" << std::endl;
+    // //build_inverted_index
+    // timeTaken = measure<>::execution(build_inverted_index);
+    // std::cout << "Inverted index built. Time taken: " << timeTaken / 1000.0
+    //           << std::fixed << std::setprecision(2) << "s" << std::endl;
 
-    //build_TF_IDF_matrix
-    timeTaken = measure<>::execution(build_TF_IDF_matrix);
-    std::cout << "TF-IDF matrix built. Time taken: " << timeTaken / 1000.0
-              << std::fixed << std::setprecision(2) << "s" << std::endl;
+    // //build_TF_IDF_matrix
+    // timeTaken = measure<>::execution(build_TF_IDF_matrix);
+    // std::cout << "TF-IDF matrix built. Time taken: " << timeTaken / 1000.0
+    //           << std::fixed << std::setprecision(2) << "s" << std::endl;
 
-    //Serialization
-    timeTaken = measure<>::execution(Serialization);
-    std::cout << "Data Serialized. Time taken: " << timeTaken / 1000.0
-              << std::fixed << std::setprecision(2) << "s" << std::endl;
+    // //Serialization
+    // timeTaken = measure<>::execution(Serialization);
+    // std::cout << "Data Serialized. Time taken: " << timeTaken / 1000.0
+    //           << std::fixed << std::setprecision(2) << "s" << std::endl;
 
     // //Deserialization
     // auto timeTaken = measure<>::execution(Deserialization);

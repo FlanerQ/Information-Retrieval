@@ -1,21 +1,51 @@
 #include <iostream>
-#include <chrono> // for std::chrono::system_clock
-#include <ctime> // for std::tm and std::time_t
+
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
+#include <boost/serialization/map.hpp>
+#include <boost/serialization/unordered_map.hpp>
+#include <boost/serialization/vector.hpp>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include<iomanip>
+#include <nlohmann/json.hpp>
+
+std::string json_path = "/home/qym/Information-Retrieval/final/parsed_lists";
+std::string dir_path = "/home/qym/Information-Retrieval/final/json/";
+
+using json = nlohmann::json;
+void change_json() {
+    std::cout << "Start building docs metadata" << std::endl;
+    for (const auto &entry : boost::filesystem::directory_iterator(json_path)) {
+        std::ofstream output_file(dir_path+entry.path().filename().string());
+        if (!is_directory(entry.path())) {
+            std::cout << entry.path().filename()
+                      << std::endl;
+            boost::filesystem::ifstream f(entry.path());
+            json data = json::parse(f);
+            for (auto &i : data) {
+                std::string id=i["id"];
+                i["url"] = "https://www1.szu.edu.cn/board/view.asp?id="+id;
+            }
+            output_file <<data.dump(4);
+            output_file.close();
+        }
+    }
+}
+
 int main() {
-    std::string input_date = "2022-02-10"; // 待比较的日期字符串
-    std::tm tm = {};
-    std::istringstream ss(input_date);
-    ss >> std::get_time(&tm, "%Y-%m-%d"); // 将日期字符串解析为 tm 结构体
-
-    std::time_t t = std::mktime(&tm); // 将 tm 转换为 time_t 类型
-    auto timestamp_input = std::chrono::system_clock::from_time_t(t); // 将 time_t 转换为 system_clock::time_point 类型
-
-    auto now = std::chrono::system_clock::now(); // 获取当前时间
-    auto timestamp_now = std::chrono::system_clock::to_time_t(now); // 将当前时间转换为 time_t 类型
-    auto days_since_input = std::chrono::duration_cast<std::chrono::hours>(now - timestamp_input).count() / 24; // 计算指定日期与当前日期之间的天数间隔
-
-    std::cout << "Days since " << input_date << ": " << days_since_input << std::endl;
-
-    return 0;
 }
