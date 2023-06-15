@@ -77,6 +77,8 @@
             var dayy = document.getElementById("dayy").value === "" ? -1 : document.getElementById("dayy").value;
             var dept = document.getElementById("dept").value === "" ? "none_dept" : document.getElementById("dept").value;
             ws.send(query + '/' + type + '/' + dayy + '/' + dept);
+            var querying=document.getElementById('res_exist');
+            res_exist.innerHTML = '查询中...';
         }
 
         ws.onmessage = function (event) {
@@ -96,12 +98,12 @@
                 return;
             }
             var row = document.createElement('tr');
-            row.innerHTML = '<td style="text-align: center;">日期</td><td style="text-align: center;">搜索结果 用时: ' + data.slice(-1)[0].time_taken / 1000.0 + ' s</td><td>得分</td>';
+            row.innerHTML = '<td style="text-align: center;">日期</td><td style="text-align: center;">单位</td><td style="text-align: center;">搜索结果 用时: ' + data.slice(-1)[0].time_taken / 1000.0 + ' s</td><td>得分</td>';
             table.appendChild(row);
             data.slice(0, size).forEach(function (item) {
                 row = document.createElement('tr');
-                row.innerHTML = '<td>'+item.date+'</td><td><a href="' + item.url + '" target="_blank">' + item.title
-                    + '</a></td><td>'+ item.similarity.toFixed(2) + '</td>';
+                row.innerHTML = '<td>' + item.date + '</td><td>' + item.dept + '</td><td><a href="' + item.url + '" target="_blank">' + item.title
+                    + '</a></td><td>' + item.similarity.toFixed(2) + '</td>';
                 table.appendChild(row);
             });
         };
@@ -110,13 +112,18 @@
 
 <body style="font-size: 32px;">
     <div class="container">
-        <label for="query">Gouba</label>
+        <label for="query">Google</label>
         <input type="text" id="query" size="40" style="font-size: 32px;"
             onkeydown="if(event.keyCode==13) sendMessage()">
         <input type="submit" style="font-size: 32px;" value="search" name="searchb1" onclick="sendMessage()">
         <form>
             <select name="type" id="type" style="width:120px; font-size: 32px;">
                 <option value="">分类</option>
+                <option value="校庆-活动预告">校庆-活动预告</option>
+                <option value="校庆-荔园影像">校庆-荔园影像</option>
+                <option value="校庆-通知公告">校庆-通知公告</option>
+                <option value="校庆-校庆动态">校庆-校庆动态</option>
+                <option value="校庆-校庆祝福">校庆-校庆祝福</option>
                 <option value="教务">教务</option>
                 <option value="科研">科研</option>
                 <option value="行政">行政</option>
@@ -139,9 +146,22 @@
                 <option value="2016">2016年</option>
                 <option value="2015">2015年</option>
                 <option value="2014">2014年</option>
+                <option value="2013">2013年</option>
+                <option value="2012">2012年</option>
+                <option value="2011">2011年</option>
+                <option value="2010">2010年</option>
+                <option value="2009">2009年</option>
+                <option value="2008">2008年</option>
+                <option value="2007">2007年</option>
+                <option value="2006">2006年</option>
+                <option value="2005">2005年</option>
+                <option value="2004">2004年</option>
+                <option value="2003">2003年</option>
+                <option value="2002">2002年</option>
             </select>
             <select name="dept" id="dept" style="width:300px; font-size: 32px;">
                 <option value="">全部发文单位</option>
+                <option value="校庆主办方">0.校庆主办方</option>
                 <option value="党政办公室">1.党政办公室</option>
                 <option value="组织部">2.组织部</option>
                 <option value="统战部">3.统战部</option>
@@ -231,7 +251,7 @@
                 <option value="深圳香蜜湖国际金融科技研究院">87.深圳香蜜湖国际金融科技研究院</option>
             </select>
         </form>
-        <div id="res">
+        <div id="res" style="font-size: 20px;">
             <p id="res_exist"></p>
             <p id="time_taken"></p>
             <table id="data-table"></table>

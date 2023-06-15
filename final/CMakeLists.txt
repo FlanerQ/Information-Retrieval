@@ -13,8 +13,8 @@ include_directories(include)
 
 find_package(nlohmann_json REQUIRED)
 
-find_library(LIBSTEMMER NAMES libstemmer.so)
-
 find_package(Boost 1.81 COMPONENTS system filesystem serialization REQUIRED)
+
+find_library(LIBSTEMMER NAMES libstemmer.so)
 
 target_link_libraries(main ${LIBSTEMMER} ${Boost_LIBRARIES} nlohmann_json::nlohmann_json)
