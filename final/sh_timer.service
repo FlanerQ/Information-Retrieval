@@ -1,0 +1,8 @@
+[Unit]
+Description=My script
+
+[Service]
+ExecStart='/home/qym/Information-Retrieval/final/crawler.sh'
+
+[Install]
+WantedBy=multi-user.target

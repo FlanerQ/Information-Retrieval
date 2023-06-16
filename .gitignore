@@ -2,6 +2,7 @@
 .cache/
 crawler/
 cele_crawler/
+offi_crawler/
 **/txts*
 **/txts_1
 **/inverted.txt

@@ -147,7 +147,7 @@ void build_docs_metadata()
     std::cout << "Start building docs metadata" << std::endl;
     for (const auto& entry : boost::filesystem::directory_iterator(json_path)) {
         if (!is_directory(entry.path())) {
-            std::cout << split(entry.path().filename().string(), ".")[0] << std::endl;
+            // std::cout << split(entry.path().filename().string(), ".")[0] << std::endl;
             boost::filesystem::ifstream f(entry.path());
             json data = json::parse(f);
             for (auto& i : data) {
@@ -193,7 +193,7 @@ void build_inverted_index()
     for (const auto& entry : boost::filesystem::directory_iterator(txts_path)) {
         if (is_directory(entry.path())) {
             std::string class_name = entry.path().filename().string();
-            std::cout << class_name << std::endl;
+            // std::cout << class_name << std::endl;
             for (const auto& sub_entry : boost::filesystem::directory_iterator(entry.path())) {
                 if (!is_directory(sub_entry.path())) {
                     int doc_name = std::stoi(sub_entry.path().filename().string());
@@ -228,6 +228,7 @@ void build_inverted_index()
 
 void build_TF_IDF_matrix()
 {
+    std::cout << "Start building TF-IDF Matrix" << std::endl;
     int k = 0;
     int docs_num = docs_metadata.size();
     for (auto& i : inverted_index) {
@@ -492,7 +493,6 @@ int main()
     auto timeTaken = measure<>::execution(Deserialization);
     std::cout << "Data Deserialized. Time taken: " << timeTaken / 1000.0 << std::fixed
               << std::setprecision(2) << "s" << std::endl;
-    std::cout<<"Terms count: " << inverted_index.size()<<std::endl;
 
     start_server();
 
